@@ -9,6 +9,8 @@ class AccountTaxTemplate(models.Model):
             ('customer', 'Customer Payment'),
             ('supplier', 'Supplier Payment'),
         ],
+        ondelete={'customer': lambda recs: recs.write({'type_tax_use': 'sale'}),
+                  'supplier': lambda recs: recs.write({'type_tax_use': 'sale'})}
     )
 
 
@@ -23,6 +25,9 @@ class AccountTax(models.Model):
             ('customer', 'Customer Payment'),
             ('supplier', 'Supplier Payment'),
         ],
+        ondelete={'customer': lambda recs: recs.write({'type_tax_use': 'sale'}),
+                  'supplier': lambda recs: recs.write({'type_tax_use': 'sale'})}
+
     )
     amount = fields.Float(
         default=0.0,

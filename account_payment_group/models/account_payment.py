@@ -98,7 +98,7 @@ class AccountPayment(models.Model):
         # this change is due this odoo change https://github.com/odoo/odoo/commit/c14b17c4855fd296fd804a45eab02b6d3566bb7a
         if self.payment_group_id:
             self.payment_group_company_id = self.payment_group_id.company_id
-            self.payment_date = self.payment_group_id.payment_date
+            self.date = self.payment_group_id.payment_date
             self.partner_type = self.payment_group_id.partner_type
             self.partner_id = self.payment_group_id.partner_id
             self.payment_type = 'inbound' if self.payment_group_id.partner_type  == 'customer' else 'outbound'
@@ -302,7 +302,7 @@ class AccountPayment(models.Model):
             payment.payment_group_id.post()
         return payment
 
-    @api.depends('invoice_ids', 'payment_type', 'partner_type', 'partner_id')
+    @api.depends('payment_type', 'partner_type', 'partner_id')
     def _compute_destination_account_id(self):
         """
         If we are paying a payment gorup with paylines, we use account
@@ -355,9 +355,9 @@ class AccountPayment(models.Model):
                 all_moves_vals += [move_vals]
         return all_moves_vals
 
-    @api.model
-    def default_get(self, default_fields):
-        rec = super().default_get(default_fields)
-        if rec.get('invoice_ids', False):
-            rec.pop('invoice_ids')
-        return rec
+    # @api.model
+    # def default_get(self, default_fields):
+    #     rec = super().default_get(default_fields)
+    #     if rec.get('invoice_ids', False):
+    #         rec.pop('invoice_ids')
+    #     return rec

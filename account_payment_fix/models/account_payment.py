@@ -7,12 +7,12 @@ _logger = logging.getLogger(__name__)
 class AccountPayment(models.Model):
     _inherit = "account.payment"
 
-    state = fields.Selection(track_visibility='always')
-    amount = fields.Monetary(track_visibility='always')
-    partner_id = fields.Many2one(track_visibility='always')
-    journal_id = fields.Many2one(track_visibility='always')
-    destination_journal_id = fields.Many2one(track_visibility='always')
-    currency_id = fields.Many2one(track_visibility='always')
+    # state = fields.Selection(track_visibility='always')
+    # amount = fields.Monetary(track_visibility='always')
+    # partner_id = fields.Many2one(track_visibility='always')
+    # journal_id = fields.Many2one(track_visibility='always')
+    # destination_journal_id = fields.Many2one(track_visibility='always')
+    # currency_id = fields.Many2one(track_visibility='always')
     # campo a ser extendido y mostrar un nombre detemrinado en las lineas de
     # pago de un payment group o donde se desee (por ej. con cheque, retención,
     # etc)
@@ -39,27 +39,27 @@ class AccountPayment(models.Model):
     # journal_at_least_type = fields.Char(
     #     compute='_compute_journal_at_least_type'
     # )
-    destination_journal_ids = fields.Many2many(
-        'account.journal',
-        compute='_compute_destination_journals'
-    )
+    # destination_journal_ids = fields.Many2many(
+    #     'account.journal',
+    #     compute='_compute_destination_journals'
+    # )
 
-    @api.depends(
-        # 'payment_type',
-        'journal_id',
-    )
-    def _compute_destination_journals(self):
-        for rec in self:
-            domain = [
-                ('type', 'in', ('bank', 'cash')),
-                # al final pensamos mejor no agregar esta restricción, por ej,
-                # para poder transferir a tarjeta a pagar. Esto solo se usa
-                # en transferencias
-                # ('at_least_one_inbound', '=', True),
-                ('company_id', '=', rec.journal_id.company_id.id),
-                ('id', '!=', rec.journal_id.id),
-            ]
-            rec.destination_journal_ids = rec.journal_ids.search(domain)
+    # @api.depends(
+    #     # 'payment_type',
+    #     'journal_id',
+    # )
+    # def _compute_destination_journals(self):
+    #     for rec in self:
+    #         domain = [
+    #             ('type', 'in', ('bank', 'cash')),
+    #             # al final pensamos mejor no agregar esta restricción, por ej,
+    #             # para poder transferir a tarjeta a pagar. Esto solo se usa
+    #             # en transferencias
+    #             # ('at_least_one_inbound', '=', True),
+    #             ('company_id', '=', rec.journal_id.company_id.id),
+    #             ('id', '!=', rec.journal_id.id),
+    #         ]
+    #         rec.destination_journal_ids = rec.journal_ids.search(domain)
 
     # @api.depends(
     #     'payment_type',
@@ -188,8 +188,8 @@ class AccountPayment(models.Model):
             self.payment_method_id = (
                 payment_methods and payment_methods[0] or False)
             # si se eligió de origen el mismo diario de destino, lo resetiamos
-            if self.journal_id == self.destination_journal_id:
-                self.destination_journal_id = False
+            # if self.journal_id == self.destination_journal_id:
+            #     self.destination_journal_id = False
         #     # Set payment method domain
         #     # (restrict to methods enabled for the journal and to selected
         #     # payment type)
@@ -202,7 +202,7 @@ class AccountPayment(models.Model):
         #                 ('id', 'in', payment_methods.ids)]}}
         # return {}
 
-    @api.depends('invoice_ids', 'payment_type', 'partner_type', 'partner_id')
+    @api.depends('payment_type', 'partner_type', 'partner_id')
     def _compute_destination_account_id(self):
         """
         We send force_company on context so payments can be created from parent
@@ -211,13 +211,13 @@ class AccountPayment(models.Model):
         """
         res = super(AccountPayment, self)._compute_destination_account_id()
         for rec in self.filtered(
-                lambda x: not x.invoice_ids and x.payment_type != 'transfer'):
+                lambda x: x.payment_type != 'transfer'):
             partner = self.partner_id.with_context(
                 force_company=self.company_id.id)
-            if self.partner_type == 'customer':
-                self.destination_account_id = (
+            if rec.partner_type == 'customer':
+                rec.destination_account_id = (
                     partner.property_account_receivable_id.id)
             else:
-                self.destination_account_id = (
+                rec.destination_account_id = (
                     partner.property_account_payable_id.id)
         return res

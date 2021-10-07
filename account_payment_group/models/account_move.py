@@ -54,7 +54,7 @@ class AccountMove(models.Model):
 
     def action_account_invoice_payment_group(self):
         self.ensure_one()
-        if self.state == 'cancel' or self.invoice_payment_state != 'not_paid':
+        if self.state == 'cancel' or self.payment_state != 'not_paid':
             raise ValidationError(_('You can only register payment if invoice is not cancelled and unpaid'))
         return {
             'name': _('Register Payment'),
