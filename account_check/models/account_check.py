@@ -525,8 +525,8 @@ class AccountCheck(models.Model):
         # hacemos esa verificación
         account = self.env['account.account']
         for rec in self:
-            credit_account = rec.journal_id.default_credit_account_id
-            debit_account = rec.journal_id.default_debit_account_id
+            credit_account = rec.journal_id.payment_credit_account_id
+            debit_account = rec.journal_id.payment_debit_account_id
             inbound_methods = rec.journal_id['inbound_payment_method_ids']
             outbound_methods = rec.journal_id['outbound_payment_method_ids']
             # si hay cuenta en diario y son iguales, y si los metodos de pago
