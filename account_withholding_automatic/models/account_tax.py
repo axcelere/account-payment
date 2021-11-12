@@ -234,6 +234,10 @@ result = withholdable_base_amount * 0.10
             ('partner_id.commercial_partner_id', '=',
                 payment_group.commercial_partner_id.id),
         ]
+        common_previous_domain_cpy = [
+            ('partner_id.commercial_partner_id', '=',
+             payment_group.commercial_partner_id.id),
+        ]
         if self.withholding_accumulated_payments == 'month':
             from_relative_delta = relativedelta(day=1)
         elif self.withholding_accumulated_payments == 'year':
@@ -242,6 +246,10 @@ result = withholdable_base_amount * 0.10
         common_previous_domain += [
             ('payment_date', '<=', to_date),
             ('payment_date', '>=', from_date),
+        ]
+        common_previous_domain_cpy += [
+            ('date', '<=', to_date),
+            ('date', '>=', from_date),
         ]
 
         previous_payment_groups_domain = common_previous_domain + [
@@ -253,7 +261,7 @@ result = withholdable_base_amount * 0.10
         # state in posted. Just in case someone implements payments cancelled
         # on posted payment group, we remove the cancel payments (not the
         # draft ones as they are also considered by public_budget)
-        previous_payments_domain = common_previous_domain + [
+        previous_payments_domain = common_previous_domain_cpy + [
             ('payment_group_id.state', 'not in',
                 ['draft', 'cancel', 'confirmed']),
             ('state', '!=', 'cancel'),
