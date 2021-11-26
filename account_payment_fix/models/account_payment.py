@@ -7,12 +7,12 @@ _logger = logging.getLogger(__name__)
 class AccountPayment(models.Model):
     _inherit = "account.payment"
 
-    state = fields.Selection(track_visibility='always')
-    amount = fields.Monetary(track_visibility='always')
-    partner_id = fields.Many2one(track_visibility='always')
-    journal_id = fields.Many2one(track_visibility='always')
-    destination_journal_id = fields.Many2one(track_visibility='always')
-    currency_id = fields.Many2one(track_visibility='always')
+    # state = fields.Selection(track_visibility='always')
+    # amount = fields.Monetary(track_visibility='always')
+    # partner_id = fields.Many2one(track_visibility='always')
+    # journal_id = fields.Many2one(track_visibility='always')
+    # destination_journal_id = fields.Many2one(track_visibility='always')
+    # currency_id = fields.Many2one(track_visibility='always')
     # campo a ser extendido y mostrar un nombre detemrinado en las lineas de
     # pago de un payment group o donde se desee (por ej. con cheque, retención,
     # etc)
@@ -95,17 +95,16 @@ class AccountPayment(models.Model):
             rec.journal_ids = rec.journal_ids.search(rec.get_journals_domain())
 
     @api.depends(
-        'journal_id.outbound_payment_method_ids',
-        'journal_id.inbound_payment_method_ids',
+        'journal_id.available_payment_method_ids',
         'payment_type',
     )
     def _compute_payment_methods(self):
         for rec in self:
-            if rec.payment_type in ('outbound', 'transfer'):
-                methods = rec.journal_id.outbound_payment_method_ids
-            else:
-                methods = rec.journal_id.inbound_payment_method_ids
-            rec.payment_method_ids = methods
+            # if rec.payment_type in ('outbound', 'transfer'):
+            #     methods = rec.journal_id.outbound_payment_method_ids
+            # else:
+            #     methods = rec.journal_id.inbound_payment_method_ids
+            rec.payment_method_ids = rec.journal_id.available_payment_method_ids
 
     @api.onchange('currency_id')
     def _onchange_currency(self):
@@ -121,17 +120,16 @@ class AccountPayment(models.Model):
         Sobre escribimos y desactivamos la parte del dominio de la funcion
         original ya que se pierde si se vuelve a entrar
         """
-        if not self.invoice_ids:
-            # Set default partner type for the payment type
-            if self.payment_type == 'inbound':
-                self.partner_type = 'customer'
-            elif self.payment_type == 'outbound':
-                self.partner_type = 'supplier'
-            else:
-                self.partner_type = False
-            # limpiamos journal ya que podria no estar disponible para la nueva
-            # operacion y ademas para que se limpien los payment methods
-            self.journal_id = False
+        # Set default partner type for the payment type
+        if self.payment_type == 'inbound':
+            self.partner_type = 'customer'
+        elif self.payment_type == 'outbound':
+            self.partner_type = 'supplier'
+        else:
+            self.partner_type = False
+        # limpiamos journal ya que podria no estar disponible para la nueva
+        # operacion y ademas para que se limpien los payment methods
+        self.journal_id = False
         # # Set payment method domain
         # res = self._onchange_journal()
         # if not res.get('domain', {}):
@@ -202,7 +200,7 @@ class AccountPayment(models.Model):
         #                 ('id', 'in', payment_methods.ids)]}}
         # return {}
 
-    @api.depends('invoice_ids', 'payment_type', 'partner_type', 'partner_id')
+    @api.depends('payment_type', 'partner_type', 'partner_id')
     def _compute_destination_account_id(self):
         """
         We send force_company on context so payments can be created from parent
@@ -211,13 +209,13 @@ class AccountPayment(models.Model):
         """
         res = super(AccountPayment, self)._compute_destination_account_id()
         for rec in self.filtered(
-                lambda x: not x.invoice_ids and x.payment_type != 'transfer'):
-            partner = self.partner_id.with_context(
-                force_company=self.company_id.id)
-            if self.partner_type == 'customer':
-                self.destination_account_id = (
+                lambda x: x.payment_type != 'transfer'):
+            partner = rec.partner_id.with_context(
+                force_company=rec.company_id.id)
+            if rec.partner_type == 'customer':
+                rec.destination_account_id = (
                     partner.property_account_receivable_id.id)
             else:
-                self.destination_account_id = (
+                rec.destination_account_id = (
                     partner.property_account_payable_id.id)
         return res
