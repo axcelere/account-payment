@@ -17,7 +17,7 @@
         "views/pos_payment.xml",
     ],
     'assets': {
-            'point_of_sale.assets': [
+            'web.assets_backend': [
                 'credit_card_instalment_pos/static/src/css/card_instalment.css',
                 'credit_card_instalment_pos/static/src/xml/**/*',
                 'credit_card_instalment_pos/static/src/js/card_instalment.js',
