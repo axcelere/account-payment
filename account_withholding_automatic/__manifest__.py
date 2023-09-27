@@ -25,7 +25,7 @@
     'data': [
         'wizards/res_config_settings_views.xml',
         'views/account_tax_view.xml',
-        'views/account_payment_group_view.xml',
+        # 'views/account_payment_group_view.xml',
         'views/account_payment_view.xml',
         'security/ir.model.access.csv',
     ],
@@ -33,7 +33,7 @@
         'demo/withholding_demo.xml',
     ],
     'depends': [
-        'account_payment_group',
+        # 'account_payment_group',
         'account_withholding',
     ],
     'installable': True,

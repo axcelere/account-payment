@@ -258,15 +258,15 @@ result = withholdable_base_amount * 0.10
         if self.withholding_accumulated_payments:
             previos_payment_groups_domain, previos_payments_domain = (
                 self.get_period_payments_domain(payment_group))
-            same_period_payments = self.env['account.payment.group'].search(
-                previos_payment_groups_domain)
-
-            for same_period_payment_group in same_period_payments:
-                same_period_amounts = \
-                    same_period_payment_group._get_withholdable_amounts(
-                        withholding_amount_type, self.withholding_advances)
-                accumulated_amount += \
-                    same_period_amounts[0] + same_period_amounts[1]
+            # same_period_payments = self.env['account.payment.group'].search(
+            #     previos_payment_groups_domain)
+            #
+            # for same_period_payment_group in same_period_payments:
+            #     same_period_amounts = \
+            #         same_period_payment_group._get_withholdable_amounts(
+            #             withholding_amount_type, self.withholding_advances)
+            #     accumulated_amount += \
+            #         same_period_amounts[0] + same_period_amounts[1]
             previous_withholding_amount = sum(
                 self.env['account.payment'].search(
                     previos_payments_domain).mapped('amount'))
