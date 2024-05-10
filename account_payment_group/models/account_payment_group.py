@@ -9,7 +9,7 @@ class AccountPaymentGroup(models.Model):
     _name = "account.payment.group"
     _description = "Payment Group"
     _order = "payment_date desc, name desc"
-    _inherit = 'mail.thread'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _check_company_auto = True
 
     name = fields.Char(string='Number', readonly=True, copy=False)
@@ -71,15 +71,9 @@ class AccountPaymentGroup(models.Model):
     commercial_partner_id = fields.Many2one(
         related='partner_id.commercial_partner_id',
     )
-    currency_id = fields.Many2one(
-        'res.currency',
-        string='Currency',
-        required=True,
-        default=lambda self: self.env.company.currency_id,
-        readonly=True,
-        states={'draft': [('readonly', False)]},
-        tracking=True,
-    )
+
+    currency_id = fields.Many2one('res.currency', related='company_id.currency_id', store=True)
+    
     payment_date = fields.Date(
         string='Payment Date',
         required=True,
@@ -351,7 +345,7 @@ class AccountPaymentGroup(models.Model):
     def _compute_selected_debt(self):
         for rec in self:
             rec.selected_debt = sum(rec.to_pay_move_line_ids._origin.mapped('amount_residual')) * (-1.0 if rec.partner_type == 'supplier' else 1.0)
-
+                
     @api.depends(
         'selected_debt', 'unreconciled_amount')
     def _compute_to_pay_amount(self):
