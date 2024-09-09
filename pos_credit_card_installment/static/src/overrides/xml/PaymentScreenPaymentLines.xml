@@ -31,7 +31,7 @@
                                 </button>
                             </t>
                         </div>
-                        <div class="payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-2 my-2 text-truncate cursor-pointer">
+                        <div t-if="line.payment_method.card_id" class="payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-2 my-2 text-truncate cursor-pointer">
                             <div>
                                 <span>
                                      Cuotas
