@@ -2,7 +2,7 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 
 from odoo import models, api, Command, fields, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError
 
 
 class AccountMove(models.Model):
@@ -44,7 +44,7 @@ class AccountMove(models.Model):
             payment_method = pay_journal._get_manual_payment_method_id(payment_type)
 
             payment = rec.env[
-                'account.payment'].create({
+                'account.payment'].with_context(pay_now=True).create({
                         'date': rec.invoice_date,
                         'partner_id': rec.commercial_partner_id.id,
                         'partner_type': partner_type,
@@ -80,3 +80,8 @@ class AccountMove(models.Model):
         res = super()._post(soft=soft)
         self.pay_now()
         return res
+
+    def _search_default_journal(self):
+        if self.env.context.get('default_company_id'):
+            self.env.company =  self.env['res.company'].browse(self.env.context.get('default_company_id'))
+        return super()._search_default_journal()

@@ -30,8 +30,10 @@ class AccountPayment(models.Model):
     def _compute_cashbox_session_id(self):
         for rec in self:
             session_ids = self.env['account.cashbox.session'].search([
+                ('state', '=', 'opened'),
+                '|',
                 ('user_ids', '=', self.env.uid),
-                ('state', '=', 'opened')
+                ('user_ids', '=', False),
             ])
             if len(session_ids) == 1:
                 rec.cashbox_session_id = session_ids.id
@@ -82,4 +84,5 @@ class AccountPayment(models.Model):
         """ Esto es para refrescar el primer journal seleccionado por si no esta en la lista de los permitidos.
         Me suena que en algun otro lugar lo hicimos de otra manera"""
         for rec in self:
-            rec.journal_id = rec.available_journal_ids._origin[:1]
+            if rec.journal_id not in rec.available_journal_ids._origin:
+                rec.journal_id = rec.available_journal_ids._origin[:1]
