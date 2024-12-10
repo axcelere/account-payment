@@ -6,7 +6,7 @@
     "author": "Axcelere",
     "website": "http://www.axcelere.com",
     "category": "pos",
-    "version": "17.0.0.0.0",
+    "version": "18.0.0.0.0",
     "depends": ['card_installment', 'point_of_sale'],
     "data": [
         "views/pos_payment_method.xml",

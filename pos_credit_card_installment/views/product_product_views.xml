@@ -7,7 +7,8 @@
             <field name="inherit_id" ref="product.product_normal_form_view"/>
             <field name="arch" type="xml">
                 <field name="categ_id" position="before">
-                    <field name="is_financial_charge" invisible="detailed_type != 'service'"/>
+                    <field name="is_financial_charge" />
+<!--                    invisible="detailed_type != 'service'"-->
                 </field>
             </field>
         </record>
