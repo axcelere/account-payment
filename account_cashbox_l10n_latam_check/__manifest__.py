@@ -2,7 +2,7 @@
 {
     "name": "Check Cashbox management",
     "summary": "Add cashbox for check operations",
-    "version": "17.0.1.1.0",
+    "version": "18.0.1.1.0",
     "category": "Accounting",
     "website": "www.adhoc.com.ar",
     "author": "ADHOC SA",
