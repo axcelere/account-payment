@@ -30,6 +30,8 @@ class PosOrder(models.Model):
         res = super(PosOrder, self)._process_order(order, draft, existing_order)
         order_id = self.env['pos.order'].search([('id', '=', res)])
         payment_method_id = order['data']['statement_ids'][0][2]['payment_method_id']
+        if 'installment_id' not in order['data']:
+            return res
         installment_id = self.env['account.card.installment'].search([('id', '=', order['data']['installment_id'])])
         if installment_id and installment_id.surcharge_coefficient:
             surcharge_coefficient = order['data']['amount_total'] * installment_id.surcharge_coefficient
@@ -40,6 +42,8 @@ class PosOrder(models.Model):
     @api.model
     def _order_fields(self, ui_order):
         res = super(PosOrder, self)._order_fields(ui_order)
+        if 'installment_id' not in ui_order:
+            return res
         installment_id = self.env['account.card.installment'].search([('id', '=', ui_order['installment_id'])])
         if installment_id and installment_id.surcharge_coefficient:
             surcharge_coefficient = res['amount_total'] * installment_id.surcharge_coefficient
