@@ -13,6 +13,28 @@ class PosOrder(models.Model):
         res = super(PosOrder, self)._order_fields(ui_order)
         if ui_order.get("installment_id"):
             res.update({"installment_id": ui_order["installment_id"]})
+            if 'installment_id' not in ui_order:
+                return res
+            installment_id = self.env['account.card.installment'].search([('id', '=', ui_order['installment_id'])])
+            if installment_id and installment_id.surcharge_coefficient:
+                surcharge_coefficient = res['amount_total'] * installment_id.surcharge_coefficient
+                product_id = self.env['product.product'].search([('is_financial_charge', '=', True)])
+                pos_session_id = self.env['pos.session'].search([('id', '=', ui_order['pos_session_id'])])
+                res['amount_total'] += surcharge_coefficient
+                res['amount_paid'] += surcharge_coefficient
+                res['lines'].append((0, 0, {
+                    'name': pos_session_id.name,
+                    'full_product_name': product_id.name,
+                    'price_unit': surcharge_coefficient,
+                    'product_id': product_id.id,
+                    'qty': 1,
+                    'discount': 0,
+                    'price_extra': 1,
+                    'price_subtotal': surcharge_coefficient,
+                    'price_subtotal_incl': surcharge_coefficient,
+                    'tax_ids': [],
+                    'pack_lot_ids': [],
+                }))
         return res
 
     @api.model
@@ -30,6 +52,8 @@ class PosOrder(models.Model):
         res = super(PosOrder, self)._process_order(order, draft, existing_order)
         order_id = self.env['pos.order'].search([('id', '=', res)])
         payment_method_id = order['data']['statement_ids'][0][2]['payment_method_id']
+        if 'installment_id' not in order['data']:
+            return res
         installment_id = self.env['account.card.installment'].search([('id', '=', order['data']['installment_id'])])
         if installment_id and installment_id.surcharge_coefficient:
             surcharge_coefficient = order['data']['amount_total'] * installment_id.surcharge_coefficient
