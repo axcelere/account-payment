@@ -1,165 +1,62 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
-    <t t-name="PaymentScreenPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension" owl="1">
-        <xpath expr="//div[hasclass('paymentlines')]" position="replace">
-            <div class="paymentlines d-flex flex-column">
-                <h4 class="title-category pt-3 pb-2 px-3 m-0 bg-view border-bottom border-2">Summary</h4>
-                <t t-foreach="props.paymentLines" t-as="line" t-key="line.cid">
-                    <t t-if="line.selected">
-                        <div class="paymentline selected d-flex align-items-center bg-200"
-                            t-att-class="selectedLineClass(line)">
-                            <div class="payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-4 my-2 text-truncate cursor-pointer" t-on-click="() => this.selectLine(line)">
-                                 <span class="payment-name">
-                                     <t t-esc="line.payment_method.name"/>
-                                 </span>
+    <t t-name="PaymentScreenPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension">
+        
+        <xpath expr="//div[@class='payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-3 text-truncate cursor-pointer fs-2']/.." position="after">
+            
+            <!-- Installment Selection Panel -->
+            <div t-if="line.payment_method_id and line.payment_method_id.card_id" class="installment-panel bg-light border rounded-3 p-3 mx-2 mt-2 shadow-sm">
 
-                                 <div class="payment-amount px-3">
-                                    <t t-if="line and line.payment_status and ['done', 'waitingCard', 'waiting', 'reversing', 'reversed'].includes(line.payment_status)">
-                                            <t t-esc="env.utils.formatCurrency(line.get_amount(), false)" />
-                                    </t>
-                                    <t t-else="">
-                                        <t t-esc="formatLineAmount(line)" />
-                                    </t>
-                                </div>
-                            </div>
+                <!-- Compact Amount Display and Installment Selector -->
+                <div class="d-flex align-items-center justify-content-between gap-3">
+                    <!-- Amount Display - Left Side -->
+                    <div class="amount-display text-start">
+                        <small class="text-muted d-block mb-1">Monto total a pagar</small>
+                        <strong class="fs-4 text-dark">
+                            <t t-set="displayAmount" t-value="line.surcharge_coefficient ? line.amount * line.surcharge_coefficient : line.amount"/>
+                            <t t-esc="env.utils.formatCurrency(displayAmount) or env.utils.formatCurrency(line.amount)"/>
+                        </strong>
+                    </div>
 
-                            <t t-if="!line.payment_status or !['reversed', 'waitingCapture'].includes(line.payment_status)">
-                                <button class="delete-button btn btn-link mx-2 px-3"
-                                    t-on-click="() => this.props.deleteLine(line.cid)"
-                                    aria-label="Delete" title="Delete">
-                                    <i class="fa fa-2x fa-times-circle" />
-                                </button>
-                            </t>
-                        </div>
-                        <div t-if="line.payment_method.card_id" class="payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-2 my-2 text-truncate cursor-pointer">
-                            <div>
-                                <span>
-                                     Cuotas
-                                 </span>
-                            </div>
-                            <div class="payment-amount px-3">
-                                <t t-set="amount" t-value="0.0" />
-                                <td colspan="2">
-                                    <select class="form-select" id="installment" name="installment" t-on-change="pos.captureChange">
-                                        <t t-set="_order" t-value="pos.get_order()" />
-                                        <t t-set="amount" t-value="Math.round(_order.selected_paymentline.amount * 100) / 100" />
-                                        <t t-foreach="pos.account_card_installment" t-as="installment" t-key="installment.id" >
-                                            <option t-if="_order.selected_paymentline.payment_method.card_id[0] == installment.card_id[0]"
-                                                    t-att-value="installment.id">
-                                                <t t-esc="installment.installment"/>
-                                                Cuota(s) - <t t-esc="env.utils.formatCurrency((amount * installment.surcharge_coefficient) + amount)"/>
-                                            </option>
+                    <!-- Installment Selector - Right Side -->
+                    <div class="installment-selector flex-fill">
+                        <label class="form-label fw-semibold mb-2 d-flex align-items-center">
+                            <i class="fa fa-list-alt me-2 text-primary"></i>
+                            Plan de cuotas:
+                        </label>
+                        <select class="form-select shadow-sm"
+                                id="installment"
+                                name="installment"
+                                t-on-change="(ev) => pos.captureChange(ev)"
+                                style="border: 2px solid #0d6efd; font-size: 0.9rem;">
+                            <option value="" class="text-muted">🔽 Seleccione una opción</option>
+                            <t t-if="pos.account_card_installment and pos.account_card_installment.length > 0">
+                                <t t-set="amount" t-value="line.amount" />
+                                <t t-set="line_key" t-value="line.uuid || line.cid || 'unknown'" />
+                                <t t-foreach="pos.account_card_installment" t-as="installment" t-key="line_key + '_inst_' + (installment.id || installment_index)" t-if="installment and installment.id">
+                                    <option t-if="line.payment_method_id.card_id and installment.card_id and line.payment_method_id.card_id.id == installment.card_id[0]"
+                                            t-att-value="installment.id"
+                                            t-att-data-installment="installment.installment"
+                                            t-att-data-surcharge="installment.surcharge_coefficient">
+                                        <t t-if="installment.installment == 1">
+                                            💳 Contado - <t t-esc="env.utils.formatCurrency(amount * installment.surcharge_coefficient)"/>
+                                            <t t-if="installment.surcharge_coefficient > 1.0">
+                                                (+<t t-esc="Math.round((installment.surcharge_coefficient - 1) * 100)"/>%)
+                                            </t>
                                         </t>
-                                    </select>
-                                </td>
-                            </div>
-                        </div>
-                        <t t-if="line and line.payment_status">
-                            <div class="paymentline electronic_payment">
-                                <t t-if="line.payment_status == 'pending'">
-                                    <div class="electronic_status">
-                                        Solicitud de pago pendiente
-                                    </div>
-                                    <div class="button send_payment_request highlight text-bg-primary" title="Send Payment Request" t-on-click="() => this.props.sendPaymentRequest(line)">
-                                        Send
-                                    </div>
+                                        <t t-else="">
+                                            📅 <t t-esc="installment.installment"/> x <t t-esc="env.utils.formatCurrency((amount * installment.surcharge_coefficient) / installment.installment)"/>
+                                            = <t t-esc="env.utils.formatCurrency(amount * installment.surcharge_coefficient)"/>
+                                            <t t-if="installment.surcharge_coefficient > 1.0">
+                                                (+<t t-esc="Math.round((installment.surcharge_coefficient - 1) * 100)"/>%)
+                                            </t>
+                                        </t>
+                                    </option>
                                 </t>
-                                <t t-elif="line.payment_status == 'retry'">
-                                    <div class="electronic_status">
-                                        Transaction cancelled
-                                    </div>
-                                    <div class="button send_payment_request highlight text-bg-primary" title="Send Payment Request" t-on-click="() => this.props.sendPaymentRequest(line)">
-                                        Retry
-                                    </div>
-                                </t>
-                                <t t-elif="line.payment_status == 'force_done'">
-                                    <div class="electronic_status">
-                                        Connection error
-                                    </div>
-                                    <div class="button send_force_done" title="Force Done" t-on-click="() => this.props.sendForceDone(line)">
-                                        Force done
-                                    </div>
-                                </t>
-                                <t t-elif="line.payment_status == 'waitingCard'">
-                                    <div class="electronic_status">
-                                        Waiting for card
-                                    </div>
-                                    <div class="button send_payment_cancel" title="Cancel Payment Request" t-on-click="() => this.props.sendPaymentCancel(line)">
-                                        Cancel
-                                    </div>
-                                </t>
-                                <t t-elif="['waiting', 'waitingCancel', 'waitingCapture'].includes(line.payment_status)">
-                                    <div class="electronic_status">
-                                        Request sent
-                                    </div>
-                                    <div>
-                                        <i class="fa fa-circle-o-notch fa-spin" role="img" />
-                                    </div>
-                                </t>
-                                <t t-elif="line.payment_status == 'reversing'">
-                                    <div class="electronic_status">
-                                        Reversal request sent to terminal
-                                    </div>
-                                    <div>
-                                        <i class="fa fa-circle-o-notch fa-spin" role="img" />
-                                    </div>
-                                </t>
-                                <t t-elif="line.payment_status == 'done'">
-                                    <div class="electronic_status">
-                                        Transacción enviada!
-                                    </div>
-<!--                                    <div>-->
-<!--                                        <i class="fa fa-circle-o-notch fa-spin" role="img" />-->
-<!--                                    </div>-->
-                                    <t t-if="line.can_be_reversed">
-                                        <div class="button send_payment_reversal" title="Reverse Payment" t-on-click="() => this.props.sendPaymentReverse(line)">
-                                            Reverse
-                                        </div>
-                                    </t>
-                                    <t t-else="">
-                                        <div></div>
-                                    </t>
-                                </t>
-                                <t t-elif="line.payment_status == 'reversed'">
-                                    <div class="electronic_status">
-                                        Payment reversed
-                                    </div>
-                                    <div></div>
-                                </t>
-                            </div>
-                        </t>
-                    </t>
-                    <t t-else="">
-                        <div class="paymentline d-flex align-items-center bg-view"
-                            t-att-class="unselectedLineClass(line)">
-                             <div class="payment-infos d-flex align-items-center justify-content-between flex-grow-1 px-3 py-4 my-2 text-truncate cursor-pointer" t-on-click="() => this.selectLine(line)">
-                                 <t t-esc="line.payment_method.name" />
-                                 <div class="payment-amount px-3">
-                                    <t t-if="line and line.payment_status and ['done', 'waitingCard', 'waiting', 'reversing', 'reversed'].includes(line.payment_status)">
-                                            <t t-esc="env.utils.formatCurrency(line.get_amount(), false)" />
-                                    </t>
-                                    <t t-else="">
-                                            <t t-esc="formatLineAmount(line)" />
-                                    </t>
-                                </div>
-                             </div>
-                            <t t-if="!line.payment_status or !['done', 'reversed'].includes(line.payment_status)">
-                                <div class="delete-button delete-button btn btn-link mx-2 px-3"
-                                    t-on-click="() => this.props.deleteLine(line.cid)"
-                                    aria-label="Delete" title="Enviar">
-                                    <i class="fa fa-2x fa-times-circle" />
-                                </div>
                             </t>
-                            <t t-if="!line.payment_status or !['done', 'reversed'].includes(line.payment_status)">
-                                <div class="delete-button delete-button btn btn-link mx-2 px-3"
-                                    t-on-click="() => this.props.deleteLine(line.cid)"
-                                    aria-label="Delete" title="Delete">
-                                    <i class="fa fa-2x fa-times-circle" />
-                                </div>
-                            </t>
-                        </div>
-                    </t>
-                </t>
+                        </select>
+                    </div>
+                </div>
             </div>
         </xpath>
     </t>

@@ -13,7 +13,7 @@ class PosPayment(models.Model):
 
     instalment_id = fields.Many2one("account.card.installment", string="Instalment plan")
     instalment = fields.Integer(
-        string="instalment plan", related="instalment_id.installment"
+        string="instalment plan",
     )
     card_type = fields.Selection(
         [("credit", "credit"), ("debit", "debit")]
@@ -50,6 +50,9 @@ class PosMakePayment(models.TransientModel):
         "account.card", string="Card", related="payment_method_id.card_id"
     )
     instalment_id = fields.Many2one("account.card.installment", string="Instalment plan")
+    instalment = fields.Integer(
+        string="instalment plan",
+    )
     card_type = fields.Selection(
         [("credit", "credit"), ("debit", "debit")]
     )

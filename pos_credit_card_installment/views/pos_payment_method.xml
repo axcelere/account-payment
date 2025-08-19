@@ -8,6 +8,7 @@
 		<field name="arch" type="xml">
 			<field name="company_id" position="after">
 				<field name="card_id"/>
+				<field name="instalment_product_id"/>
 			</field>
 		</field>
 	</record>
