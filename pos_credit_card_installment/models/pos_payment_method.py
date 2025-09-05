@@ -1,6 +1,14 @@
 from odoo import api, fields, models, _
 
 
+class ResCompany(models.Model):
+    _inherit = 'res.company'
+
+    double_validation = fields.Boolean(
+        readonly=False,
+    )
+
+
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
