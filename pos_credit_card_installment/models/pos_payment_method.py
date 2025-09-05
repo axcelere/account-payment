@@ -1,6 +1,15 @@
 from odoo import api, fields, models, _
 
 
+class ResConfigSettings(models.TransientModel):
+    _inherit = 'res.config.settings'
+
+    double_validation = fields.Boolean(
+        related='company_id.double_validation',
+        readonly=False,
+    )
+
+
 class PosPaymentMethod(models.Model):
 
     _inherit = "pos.payment.method"
