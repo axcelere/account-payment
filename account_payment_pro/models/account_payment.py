@@ -31,6 +31,9 @@ class AccountPayment(models.Model):
         compute="_compute_other_currency",
     )
     journal_currency_id = fields.Many2one(related="journal_id.currency_id", string="Journal Currency")
+    destination_journal_currency_id = fields.Many2one(
+        related="destination_journal_id.currency_id", string="Destination Journal Currency"
+    )
     force_amount_company_currency = fields.Monetary(
         string="Forced Amount on Company Currency",
         currency_field="company_currency_id",
@@ -134,11 +137,11 @@ class AccountPayment(models.Model):
                 rec.env["account.write_off.type"].search([("company_ids", "=", rec.company_id.id)], limit=1)
             )
 
-    @api.constrains("to_pay_move_line_ids")
+    @api.constrains("to_pay_move_line_ids", "state")
     def _check_to_pay_lines_account(self):
         """TODO ver si esto tmb lo llevamos a la UI y lo mostramos como un warning.
         tmb podemos dar mas info al usuario en el error"""
-        for rec in self:
+        for rec in self.filtered(lambda x: x.partner_id and x.state != "draft"):
             accounts = rec.to_pay_move_line_ids.mapped("account_id")
             if len(accounts) > 1:
                 raise ValidationError(_("To Pay Lines must be of the same account!"))
@@ -160,7 +163,11 @@ class AccountPayment(models.Model):
                 # https://github.com/odoo/odoo/blob/b6b90636938ae961c339807ea893cabdede9f549/addons/account/models/account_move.py#L2476
                 # y permitirnos realizar la modificacion del journal.
                 if "journal_id" in vals and rec.journal_id.id != vals["journal_id"]:
-                    rec.move_id.sequence_number = 0
+                    # Lo agregamos a este cambio por el siguiente campo agregado en
+                    #  https://github.com/odoo/odoo/commit/da49c9268b3876a0482a5593379c02418e806b61
+                    # De esta forma evitamos el error de asignar un sequence_number de forma random que ademas se estaba recomputando nuevamente,
+                    # volviendo a su valor original.
+                    rec.move_id.quick_edit_mode = True
 
                 # Lo siguiente lo agregamos para primero obligarnos a cambiar el journal_id y no la company_id. Una vez cambiado el journal_id
                 # la company_id se cambia correctamente.
@@ -197,14 +204,21 @@ class AccountPayment(models.Model):
         # Cambiamos el metodo para que traiga los journals de la compañia sobre la cual se esta imputando el pago.
         # Le agregamos el onchange de company para asegurarnos de que los available journals se computen siempre
         # que se produce un cambio de compañia
-        self.env.company = self.company_id
+        if self.company_id:
+            self.env.company = self.company_id
         super()._compute_available_journal_ids()
 
-    @api.depends("currency_id")
+    @api.depends("currency_id", "destination_journal_currency_id")
     def _compute_other_currency(self):
         for rec in self:
             rec.other_currency = False
             if rec.company_currency_id and rec.currency_id and rec.company_currency_id != rec.currency_id:
+                rec.other_currency = True
+            elif (
+                rec.is_internal_transfer
+                and rec.destination_journal_currency_id
+                and rec.company_currency_id != rec.destination_journal_currency_id
+            ):
                 rec.other_currency = True
 
     @api.depends("amount", "other_currency", "amount_company_currency")
@@ -252,7 +266,7 @@ class AccountPayment(models.Model):
                 force_amount_company_currency = False
             rec.force_amount_company_currency = force_amount_company_currency
 
-    @api.depends("amount", "other_currency", "force_amount_company_currency", "amount_company_currency_signed")
+    @api.depends("amount", "other_currency", "force_amount_company_currency")
     def _compute_amount_company_currency(self):
         """
         * Si las monedas son iguales devuelve 1
@@ -265,7 +279,7 @@ class AccountPayment(models.Model):
             elif rec.force_amount_company_currency:
                 amount_company_currency = rec.force_amount_company_currency
             else:
-                amount_company_currency = rec.amount_company_currency_signed or rec.currency_id._convert(
+                amount_company_currency = rec.currency_id._convert(
                     rec.amount, rec.company_id.currency_id, rec.company_id, rec.date
                 )
             rec.amount_company_currency = amount_company_currency
@@ -339,16 +353,11 @@ class AccountPayment(models.Model):
             )
 
         if self._use_counterpart_currency():
-            if self.payment_type == "inbound":
-                # Receive money.
-                liquidity_amount_currency = self.counterpart_currency_amount
-            elif self.payment_type == "outbound":
-                # Send money.
-                liquidity_amount_currency = -self.counterpart_currency_amount
+            sign = 1 if res[1].get("amount_currency", 1) >= 0 else -1
             res[1].update(
                 {
                     "currency_id": self.counterpart_currency_id.id,
-                    "amount_currency": -liquidity_amount_currency,
+                    "amount_currency": sign * abs(self.counterpart_currency_amount),
                 }
             )
         return res
@@ -530,7 +539,9 @@ class AccountPayment(models.Model):
             # agregamos este chequeo porque cuando estamos creando un pago nuevo se llama este inverse siempre
             # y si el monto no cambio no queremos que trigeree re computo de retenciones
             # (por el depends de _compute_base_amount)
-            if not rec.currency_id or (rec.currency_id and not rec.currency_id.is_zero(rec.unreconciled_amount - (rec.to_pay_amount - rec.selected_debt))):
+            if rec.currency_id and not rec.currency_id.is_zero(
+                rec.unreconciled_amount - (rec.to_pay_amount - rec.selected_debt)
+            ):
                 rec.unreconciled_amount = rec.to_pay_amount - rec.selected_debt
 
     # We dont set 'is_internal_transfer' as a dependencies as it could leed to recompute to_pay_move_line_ids
@@ -543,18 +554,26 @@ class AccountPayment(models.Model):
 
         # Se recomputan las lienas solo si la deuda que esta seleccionada solo si
         # cambio el partner, compania o partner_type
-        self = self.filtered(lambda x: x.state == "draft")
-        internal_transfers = self.filtered(lambda x: x.is_internal_transfer)
-        with_payment_pro = self.filtered(lambda x: x.company_id.use_payment_pro and not x.is_internal_transfer)
+        records = self.filtered(lambda x: x.state == "draft")
+        internal_transfers = records.filtered(lambda x: x.is_internal_transfer)
+
+        with_payment_pro = self._get_filter_payments(records, ["direct_debit_mandate_id"])
+
         if internal_transfers or not self._context.get("pay_now"):
             ((internal_transfers or self) - with_payment_pro).to_pay_move_line_ids = [Command.clear()]
         for rec in with_payment_pro:
-            if (
-                rec.partner_id != rec._origin.partner_id
-                or rec.partner_type != rec._origin.partner_type
-                or rec.company_id != rec._origin.company_id
-            ):
-                rec._add_all()
+            rec._add_all()
+
+    def _get_filter_payments(self, records, extra_fields):
+        records = records.filtered(
+            lambda x: x.company_id.use_payment_pro and not x.is_internal_transfer and not x.payment_transaction_id
+        )
+
+        for field in extra_fields:
+            if records._fields.get(field):
+                records = records.filtered(lambda x, f=field: not getattr(x, f))
+
+        return records
 
     def _get_to_pay_move_lines_domain(self):
         self.ensure_one()
@@ -571,7 +590,8 @@ class AccountPayment(models.Model):
                 "asset_receivable" if self.partner_type == "customer" else "liability_payable",
             ),
         ]
-        if self.env.context.get("active_ids"):
+        # TODO revisar bien estos, no debería ser necesario, ver el blame porque se agrego lo del active_ids
+        if self.env.context.get("active_ids") and self.env.context.get("active_model") == "account.move.line":
             domain.append(("move_id.line_ids", "in", self.env.context.get("active_ids")))
         return domain
 
@@ -602,14 +622,14 @@ class AccountPayment(models.Model):
                     % (rec.partner_id.name, to_pay_partners.name)
                 )
 
-    def action_post(self):
-        res = super().action_post()
+    def _reconcile_after_post(self):
         for rec in self.filtered(lambda x: x.company_id.use_payment_pro and not x.is_internal_transfer):
             counterpart_aml = rec.mapped("move_id.line_ids").filtered(
                 lambda r: not r.reconciled and r.account_id.account_type in self._get_valid_payment_account_types()
             )
-            if counterpart_aml and rec.to_pay_move_line_ids:
-                (counterpart_aml + (rec.to_pay_move_line_ids)).reconcile()
+            debt_aml = rec.to_pay_move_line_ids.filtered(lambda r: not r.reconciled)
+            if counterpart_aml and debt_aml:
+                (counterpart_aml + (debt_aml)).reconcile()
             # Lo sacamos ya que no es correcto de odoo cuando se deslinkea el pago
             # o se linkea por otro lado el pago no lo suma. Decidimos dejarlo por si surge la necesidad
             # Si surge la necesidad habria que tratar de que lo de odoo nativo funcione
@@ -617,11 +637,23 @@ class AccountPayment(models.Model):
             #     for invoices in (rec.reconciled_invoice_ids + rec.reconciled_bill_ids):
             #         invoices.matched_payment_ids += rec
 
+    def action_post(self):
+        res = super().action_post()
+        self._reconcile_after_post()
         return res
+
+    def _get_mached_payment(self):
+        return self.ids
 
     # --- ORM METHODS--- #
     def web_read(self, specification):
         fields_to_read = list(specification) or ["id"]
         if "matched_move_line_ids" in fields_to_read and "context" in specification["matched_move_line_ids"]:
-            specification["matched_move_line_ids"]["context"].update({"matched_payment_ids": self._ids})
+            specification["matched_move_line_ids"]["context"].update(
+                {"matched_payment_ids": self._get_mached_payment()}
+            )
         return super().web_read(specification)
+
+    @api.depends("journal_id")
+    def _compute_available_partner_bank_ids(self):
+        super()._compute_available_partner_bank_ids()

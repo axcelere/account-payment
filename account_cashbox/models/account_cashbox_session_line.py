@@ -16,8 +16,16 @@ class PopSessionJournalControl(models.Model):
     # ultima los cambios afectarian solo esta session.
     # Luego tal vez veremos de trackear y/o guardar lo efectivamente contado
     balance_start = fields.Monetary(currency_field="currency_id")
-    balance_end_real = fields.Monetary("Real Ending Balance", currency_field="currency_id")
+    balance_end_real = fields.Monetary("Real Ending Balance", currency_field="currency_id", default=0.0001)
     balance_end = fields.Monetary("Ending Balance", currency_field="currency_id", compute="_compute_amounts")
+    balance_difference = fields.Monetary(
+        "Difference",
+        currency_field="currency_id",
+        compute="_compute_balance_difference",
+        help="The difference between the ending balance and the real ending balance",
+        readonly=True,
+    )
+
     amount = fields.Monetary(currency_field="currency_id", compute="_compute_amounts")
     currency_id = fields.Many2one("res.currency", compute="_compute_curency")
     require_cash_control = fields.Boolean("require_cash_control", compute="_compute_require_cash_control")
@@ -30,16 +38,25 @@ class PopSessionJournalControl(models.Model):
             [("cashbox_session_id", "in", self.mapped("cashbox_session_id").ids), ("state", "!=", "draft")]
         )
         for record in self:
-            amount = sum(
-                payments_lines.filtered(
-                    lambda p: p.cashbox_session_id == record.cashbox_session_id and p.journal_id == record.journal_id
-                ).mapped("amount_signed")
+            lines = payments_lines.filtered(
+                lambda p: p.cashbox_session_id == record.cashbox_session_id and p.journal_id == record.journal_id
             )
+
+            if record.journal_id.currency_id:
+                amount = sum(lines.mapped("amount_signed"))
+            else:
+                amount = sum(lines.mapped("amount_company_currency_signed"))
+
             record.amount = amount
             record.balance_end = amount + record.balance_start
             self -= record
         self.amount = False
         self.balance_end = False
+
+    @api.depends("balance_end", "balance_end_real")
+    def _compute_balance_difference(self):
+        for rec in self:
+            rec.balance_difference = rec.balance_end_real - rec.balance_end
 
     @api.depends("cashbox_session_id.cashbox_id.cash_control_journal_ids", "journal_id")
     def _compute_require_cash_control(self):

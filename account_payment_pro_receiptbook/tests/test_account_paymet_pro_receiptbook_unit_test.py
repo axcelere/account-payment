@@ -1,8 +1,11 @@
-import odoo.tests.common as common
+import json
+
 from odoo import Command, fields
+from odoo.exceptions import ValidationError
+from odoo.tests import TransactionCase
 
 
-class TestAccountPaymentProReceiptbookUnitTest(common.TransactionCase):
+class TestAccountPaymentProReceiptbookUnitTest(TransactionCase):
     def setUp(self):
         super().setUp()
         self.today = fields.Date.today()
@@ -16,6 +19,9 @@ class TestAccountPaymentProReceiptbookUnitTest(common.TransactionCase):
         self.company.use_payment_pro = True
         self.company.use_receiptbook = True
         self.partner_ri = self.env["res.partner"].search([("name", "=", "Deco Addict")])
+        self.receiptbook = self.env["account.payment.receiptbook"].search(
+            [("company_id", "=", self.company.id), ("name", "=", "Customer Receipts")]
+        )
 
     def test_create_payment_with_receiptbook(self):
         invoice = self.env["account.move"].create(
@@ -57,38 +63,105 @@ class TestAccountPaymentProReceiptbookUnitTest(common.TransactionCase):
         payment.action_post()
         self.assertEqual(payment.name, name, "no se tomo la secuencia correcta del pago")
 
-    # TODO revisar por qué al cambiar por shell los valores se vuelve a cambiar el nombre
-    # def test_payment_sequence_with_reset_to_draft(self):
-    #     """Test payment sequence behavior when resetting to draft and reposting."""
-    #     self.company = self.env.ref('base.company_ri')
-    #     # Step 1: Create a payment with an amount of 100 and post it
-    #     receiptbook_id = self.env["account.payment.receiptbook"].search(
-    #         [("company_id", "=", self.company.id), ("name", "=", "Customer Receipts")]
-    #     )
-    #     payment_vals = {
-    #         "journal_id": self.company_bank_journal.id,
-    #         "amount": 100,
-    #         "date": self.today,
-    #         "receiptbook_id": receiptbook_id.id
-    #     }
-    #     payment = self.env["account.payment"].create(payment_vals)
-    #     payment.action_post()
+    def test_payment_amount_update(self):
+        """Test creating a payment, posting it, resetting to draft, updating amount, and validating name."""
+        payment = self.env["account.payment"].create(
+            {
+                "amount": 100,
+                "payment_type": "inbound",
+                "partner_id": self.partner_ri.id,
+                "journal_id": self.company_bank_journal.id,
+                "date": self.today,
+                "company_id": self.company.id,
+                "receiptbook_id": self.receiptbook.id,
+            }
+        )
 
-    #     # Step 2: Reset the payment to draft
-    #     payment.action_draft()
+        # Post the payment
+        payment.action_post()
+        original_name = payment.name
 
-    #     # Step 3: Change amount
-    #     payment.write({'amount': 123})
+        # Reset to draft
+        payment.action_draft()
 
-    #     # Step 4: Post the payment again
-    #     payment.action_post()
+        # Update the amount
+        payment.amount = 200
 
-    #     # Assert the payment name is updated to the next expected name in the receiptbook sequence
-    #     new_number_next_actual = receiptbook_id.with_context(ir_sequence_date=self.today).sequence_id.number_next_actual
-    #     new_expected_name = "%s %s%s" % (
-    #         receiptbook_id.document_type_id.doc_code_prefix,
-    #         receiptbook_id.prefix,
-    #         str(new_number_next_actual).zfill(receiptbook_id.sequence_id.padding),
-    #     )
-    #     self.assertEqual(payment.name, new_expected_name,
-    #                      "The payment sequence did not update to the next expected name after resetting to draft.")
+        # Post again
+        payment.action_post()
+
+        # Validate that the name remains the same
+        self.assertEqual(
+            payment.name, original_name, "The payment name should remain the same after updating the amount."
+        )
+
+    def test_payment_name_uniqueness(self):
+        """
+        Create 2 payments with bank and cash journals, post them,
+        try to resequence the first one with the name of the second and validate ValidationError.
+        """
+        # Search for cash journal
+        cash_journal = self.env["account.journal"].search(
+            [("company_id", "=", self.company.id), ("type", "=", "cash")], limit=1
+        )
+        self.assertTrue(self.company_bank_journal, "No bank journal found")
+        self.assertTrue(cash_journal, "No cash journal found")
+        if cash_journal:
+            (cash_journal.outbound_payment_method_line_ids + cash_journal.inbound_payment_method_line_ids).write(
+                {"payment_account_id": cash_journal.default_account_id.id}
+            )
+
+        (
+            self.company_bank_journal.outbound_payment_method_line_ids
+            + self.company_bank_journal.inbound_payment_method_line_ids
+        ).write({"payment_account_id": self.company_bank_journal.default_account_id.id})
+
+        # Create first payment (bank)
+        payment1 = self.env["account.payment"].create(
+            {
+                "amount": 100,
+                "payment_type": "inbound",
+                "partner_id": self.partner_ri.id,
+                "journal_id": self.company_bank_journal.id,
+                "date": self.today,
+                "company_id": self.company.id,
+                "receiptbook_id": self.receiptbook.id,
+            }
+        )
+        payment1.action_post()
+        payment1.filtered(lambda p: not p.move_id)._generate_journal_entry()
+
+        # Create second payment (cash)
+        payment2 = self.env["account.payment"].create(
+            {
+                "amount": 200,
+                "payment_type": "inbound",
+                "partner_id": self.partner_ri.id,
+                "journal_id": cash_journal.id,
+                "date": self.today,
+                "company_id": self.company.id,
+                "receiptbook_id": self.receiptbook.id,
+            }
+        )
+        payment2.action_post()
+        payment2.filtered(lambda p: not p.move_id)._generate_journal_entry()
+
+        # Try to resequence the first payment with the name of the second
+        resequence_wizard = self.env["account.resequence.wizard"].create(
+            {
+                "move_ids": [(6, 0, [payment1.move_id.id])],
+                "ordering": "keep",
+                "new_values": json.dumps(
+                    {
+                        str(payment1.move_id.id): {
+                            "new_by_name": payment2.name,
+                            "new_by_date": payment2.name,
+                        }
+                    }
+                ),
+                "first_name": payment2.name,
+            }
+        )
+        with self.assertRaises(ValidationError) as cm:
+            resequence_wizard.resequence()
+        self.assertIn("already exist", str(cm.exception))

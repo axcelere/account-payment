@@ -3,15 +3,15 @@
 # 	* card_installment
 # 
 # Translators:
-# Juan José Scarafía <scarafia.juanjose@gmail.com>, 2024
+# Juan José Scarafía <scarafia.juanjose@gmail.com>, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-04 16:29+0000\n"
+"POT-Creation-Date: 2025-08-20 21:20+0000\n"
 "PO-Revision-Date: 2024-11-14 20:13+0000\n"
-"Last-Translator: Juan José Scarafía <scarafia.juanjose@gmail.com>, 2024\n"
+"Last-Translator: Juan José Scarafía <scarafia.juanjose@gmail.com>, 2025\n"
 "Language-Team: Spanish (https://app.transifex.com/adhoc/teams/46451/es/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -101,6 +101,12 @@ msgstr "Nombre a Mostrar"
 #. module: card_installment
 #: model:ir.model.fields,field_description:card_installment.field_account_card_installment__divisor
 msgid "Divisor"
+msgstr ""
+
+#. module: card_installment
+#. odoo-python
+#: code:addons/card_installment/models/account_card_installment.py:0
+msgid "Divisor cannot be negative"
 msgstr ""
 
 #. module: card_installment
@@ -196,7 +202,7 @@ msgstr "Coeficiente"
 #. module: card_installment
 #: model:ir.model,name:card_installment.model_account_card_installment
 msgid "amount to add for collection in installments"
-msgstr "Importe a agregar para la cobranza en cuotas"
+msgstr "CCantidad a añadir para cobro en cuotas"
 
 #. module: card_installment
 #: model:ir.model.fields,field_description:card_installment.field_account_card__name

@@ -2,7 +2,8 @@
 # For copyright and license notices, see __manifest__.py file in module root
 # directory
 ##############################################################################
-from odoo import _, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class AccountCardInstallment(models.Model):
@@ -30,12 +31,16 @@ class AccountCardInstallment(models.Model):
     )
     active = fields.Boolean(default=True)
 
-    def name_get(self):
-        result = []
+    @api.depends("card_id", "card_id.name", "name")
+    def _compute_display_name(self):
         for record in self:
-            name = record.card_id.name + " " + record.name
-            result.append((record.id, name))
-        return result
+            record.display_name = f"{record.name} ({record.card_id.name})"
+
+    @api.constrains("divisor")
+    def _check_divisor(self):
+        for record in self:
+            if record.divisor < 0:
+                raise ValidationError(_("Divisor cannot be negative"))
 
     def get_fees(self, amount):
         self.ensure_one()
@@ -57,6 +62,7 @@ class AccountCardInstallment(models.Model):
     def map_installment_values(self, amount_total):
         self.ensure_one()
         amount = amount_total * self.surcharge_coefficient
+        installment_amount = amount / self.divisor if self.divisor > 0 else 0.0
         return {
             "id": self.id,
             "name": self.name,
@@ -67,5 +73,5 @@ class AccountCardInstallment(models.Model):
             "base_amount": amount_total,
             "amount": amount,
             "fee": amount - amount_total,
-            "description": _("%s installment of %.2f (total %.2f)") % (self.divisor, amount / self.divisor, amount),
+            "description": _("%s installment of %.2f (total %.2f)") % (self.divisor, installment_amount, amount),
         }
